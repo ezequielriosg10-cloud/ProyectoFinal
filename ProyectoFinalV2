@@ -1,0 +1,596 @@
+import json
+from pprint import pprint
+import time
+import tracemalloc
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import sys
+
+# Aumentar el límite de recursión para Quick Sort
+# Si n es muy grande, esto puede ser necesario.
+sys.setrecursionlimit(2000) 
+
+# ============================================================================
+# FUNCIONES BASE Y ALGORITMOS GENÉRICOS
+# ============================================================================
+
+def leer_peliculas(nombre_archivo):
+    """Lee las películas desde un archivo JSON"""
+    with open(nombre_archivo, "r", encoding="utf-8") as archivo:
+        peliculas = json.load(archivo)
+    return peliculas
+
+def bubble_sort(lista, campo, descendente=False):
+    """
+    Algoritmo Bubble Sort genérico para ordenar por cualquier campo.
+    Acepta un parámetro 'descendente' para cambiar la dirección.
+    Complejidad: O(n²)
+    """
+    n = len(lista)
+    # Crear copia para no modificar original si es llamada para el reporte
+    lista_copia = lista.copy() 
+    
+    for i in range(n - 1): 
+        for j in range(n - i - 1):
+            if descendente:
+                # Orden descendente (Mayor a Menor)
+                if lista_copia[j][campo] < lista_copia[j + 1][campo]:
+                    lista_copia[j], lista_copia[j + 1] = lista_copia[j + 1], lista_copia[j]
+            else:
+                # Orden ascendente (Menor a Mayor) por defecto
+                if lista_copia[j][campo] > lista_copia[j + 1][campo]:
+                    lista_copia[j], lista_copia[j + 1] = lista_copia[j + 1], lista_copia[j]
+    return lista_copia # Retorna la copia ordenada
+
+def quick_sort(lista, campo, inicio, fin):
+    """
+    Algoritmo Quick Sort genérico para ordenar por cualquier campo.
+    Ordena In-place (modifica la lista original).
+    Complejidad: O(n log n) promedio
+    """
+    if inicio >= fin:
+        return
+    
+    # Función auxiliar de partición (Lomuto o Hoare, aquí Hoare-like simple)
+    def particion(lista, campo, inicio, fin):
+        pivote = lista[fin][campo]
+        i = inicio - 1
+        for j in range(inicio, fin):
+            if lista[j][campo] <= pivote:
+                i = i + 1
+                lista[i], lista[j] = lista[j], lista[i]
+        lista[i + 1], lista[fin] = lista[fin], lista[i + 1]
+        return i + 1
+
+    pos = particion(lista, campo, inicio, fin)
+    quick_sort(lista, campo, inicio, pos - 1)
+    quick_sort(lista, campo, pos + 1, fin)
+
+# ============================================================================
+# IMPLEMENTACIÓN II 
+# Búsqueda, Ordenamiento y Pruebas
+# ============================================================================
+
+def busqueda_binaria_por_id(lista, id_buscado):
+    """
+    Busca una película por ID usando búsqueda binaria.
+    REQUISITO: Las películas DEBEN estar ordenadas por 'id' ANTES de llamar.
+    Complejidad: O(log n)
+    """
+    inicio = 0
+    fin = len(lista) - 1
+    
+    while inicio <= fin:
+        medio = (inicio + fin) // 2
+        
+        # Validación de tipo (por si acaso el ID no es numérico)
+        try:
+            id_medio = int(lista[medio]['id'])
+        except (ValueError, TypeError):
+            # En un caso real, esto indicaría un problema en los datos
+            return None, None 
+            
+        if id_medio == id_buscado:
+            return medio, lista[medio]
+        
+        elif id_medio < id_buscado:
+            inicio = medio + 1
+        else:
+            fin = medio - 1
+    
+    return None, None
+
+
+def busqueda_secuencial_por_titulo(lista, titulo_parcial):
+    """
+    Busca películas por título usando búsqueda secuencial PARCIAL.
+    Complejidad: O(n)
+    """
+    resultados = []
+    titulo_parcial = titulo_parcial.lower().strip()
+    
+    for i in range(len(lista)):
+        titulo_pelicula = lista[i]['titulo'].lower()
+        
+        # Búsqueda parcial: verifica si el texto está contenido en el título
+        if titulo_parcial in titulo_pelicula:
+            resultados.append((i, lista[i]))
+    
+    return resultados
+
+
+def generar_reporte_rating(lista):
+    """
+    Genera un reporte de películas ordenadas por rating (mayor a menor).
+    Usa el Bubble Sort genérico.
+    """
+    # Ordenar por rating usando Bubble Sort genérico, en modo descendente (Mayor a Menor)
+    peliculas_ordenadas = bubble_sort(lista, 'rating', descendente=True)
+    
+    # Generar reporte
+    print("\n" + "="*70)
+    print(" "*15 + "REPORTE DE PELÍCULAS POR RATING")
+    print(" "*16 + "(Ordenadas con Bubble Sort)")
+    print(" "*20 + "(Mayor a Menor)")
+    print("="*70)
+    
+    for i, pelicula in enumerate(peliculas_ordenadas, 1):
+        print(f"\n#{i}")
+        print(f"   Título:    {pelicula['titulo']}")
+        print(f"   Año:       {pelicula['ano']}")
+        print(f"   Director:  {pelicula['director']}")
+        print(f"   Rating:    {pelicula['rating']}/10")
+        print("-"*70)
+    
+    print("\n" + "="*70)
+    print(f"Total de películas: {len(peliculas_ordenadas)}")
+    print("="*70 + "\n")
+
+
+def imprimir_resultado_busqueda_id(posicion, pelicula):
+    """Imprime el resultado de una búsqueda por ID con formato."""
+    print("\n" + "="*60)
+    print("[OK] PELICULA ENCONTRADA (Usando Búsqueda Binaria)")
+    print("="*60)
+    print(f"Posicion en el arreglo: {posicion}")
+    print(f"ID:                     {pelicula['id']}")
+    print(f"Titulo:                 {pelicula['titulo']}")
+    print(f"Director:               {pelicula['director']}")
+    print(f"Duracion:               {pelicula['duracion']} minutos")
+    print(f"Ano:                    {pelicula['ano']}")
+    print(f"Rating:                 {pelicula['rating']}/10")
+    print("="*60 + "\n")
+
+
+def imprimir_resultados_busqueda_titulo(resultados):
+    """Imprime los resultados de una búsqueda por título con formato."""
+    if not resultados:
+        print("\n[X] No se encontraron peliculas con ese titulo\n")
+        return
+    
+    print("\n" + "="*60)
+    print(f"[OK] SE ENCONTRARON {len(resultados)} PELICULA(S) (Usando Búsqueda Secuencial)")
+    print("="*60)
+    
+    for posicion, pelicula in resultados:
+        print(f"\nPosicion en el arreglo: {posicion}")
+        print(f"ID:                     {pelicula['id']}")
+        print(f"Titulo:                 {pelicula['titulo']}")
+        print(f"Director:               {pelicula['director']}")
+        print(f"Duracion:               {pelicula['duracion']} minutos")
+        print(f"Ano:                    {pelicula['ano']}")
+        print(f"Rating:                 {pelicula['rating']}/10")
+        print("-"*60)
+    
+    print("="*60 + "\n")
+
+
+# ============================================================================
+# FUNCIONES AUXILIARES
+# ============================================================================
+
+def cambiar_archivo_datos():
+    """
+    Permite al usuario cambiar el archivo JSON de donde se cargan las películas.
+    """
+    print("\n" + "="*60)
+    print("CAMBIAR ARCHIVO DE DATOS")
+    print("="*60)
+    print("Archivos disponibles:")
+    print("1. peliculas.json (por defecto)")
+    print("2. peliculas_50.json")
+    print("3. peliculas_200.json")
+    print("4. peliculas_500.json")
+    print("5. peliculas_1000.json")
+    print("6. Otro archivo (nombre personalizado)")
+    
+    opcion = input("\nSeleccione: ").strip()
+    
+    archivos = {
+        "1": "peliculas.json",
+        "2": "peliculas_50.json",
+        "3": "peliculas_200.json",
+        "4": "peliculas_500.json",
+        "5": "peliculas_1000.json"
+    }
+    
+    if opcion in archivos:
+        return archivos[opcion]
+    elif opcion == "6":
+        return input("Ingrese el nombre del archivo: ").strip()
+    else:
+        print("Opcion no valida, usando archivo actual.")
+        return None
+
+
+# ============================================================================
+# ANÁLISIS EMPÍRICO 
+# ============================================================================
+
+def medir_tiempo_memoria(funcion, *args):
+    """Mide el tiempo de ejecución y memoria pico usada para una función."""
+    tracemalloc.start()
+    inicio = time.perf_counter()
+    
+    resultado = funcion(*args)
+    
+    fin = time.perf_counter()
+    memoria_actual, memoria_pico = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    
+    tiempo_s = fin - inicio
+    memoria_kb = memoria_pico / 1024
+    
+    return tiempo_s, memoria_kb, resultado
+
+def generar_graficas_interactivas(tamaños, tiempos, memorias):
+    """
+    Genera gráficas interactivas (Plotly) comparando Búsqueda Secuencial (O(n))
+    y Bubble Sort (O(n²))
+    """
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=('<b>Complejidad Temporal</b>', '<b>Complejidad Espacial</b>'),
+        horizontal_spacing=0.10
+    )
+    
+    # -------------------
+    # GRÁFICA DE TIEMPO
+    # -------------------
+    
+    # Búsqueda Secuencial O(n)
+    fig.add_trace(
+        go.Scatter(
+            x=tamaños,
+            y=tiempos['busqueda_secuencial'], # CLAVE CORREGIDA
+            mode='lines+markers',
+            name='Búsqueda Secuencial O(n)',
+            line=dict(color='green', width=3),
+            marker=dict(size=10),
+            legendgroup='busqueda',
+            hovertemplate='<b>Búsqueda Secuencial</b><br>n: %{x}<br>Tiempo: %{y:.9f}s<extra></extra>'
+        ),
+        row=1, col=1
+    )
+
+    # Bubble Sort O(n²)
+    fig.add_trace(
+        go.Scatter(
+            x=tamaños,
+            y=tiempos['bubble_sort'], # CLAVE CORREGIDA
+            mode='lines+markers',
+            name='Bubble Sort O(n²)', # ETIQUETA CORREGIDA
+            line=dict(color='red', width=3), 
+            marker=dict(size=10),
+            legendgroup='ordenamiento',
+            hovertemplate='<b>Bubble Sort</b><br>n: %{x}<br>Tiempo: %{y:.9f}s<extra></extra>'
+        ),
+        row=1, col=1
+    )
+    
+    # -------------------
+    # GRÁFICA DE MEMORIA
+    # -------------------
+
+    # Búsqueda Secuencial O(n)
+    fig.add_trace(
+        go.Scatter(
+            x=tamaños,
+            y=memorias['busqueda_secuencial'], # CLAVE CORREGIDA
+            mode='lines+markers',
+            name='Búsqueda Secuencial O(n)',
+            line=dict(color='green', width=3),
+            marker=dict(size=10),
+            legendgroup='busqueda',
+            showlegend=False,
+            hovertemplate='<b>Búsqueda Secuencial</b><br>n: %{x}<br>Memoria: %{y:.2f} KB<extra></extra>'
+        ),
+        row=1, col=2
+    )
+
+    # Bubble Sort O(n²)
+    fig.add_trace(
+        go.Scatter(
+            x=tamaños,
+            y=memorias['bubble_sort'], # CLAVE CORREGIDA
+            mode='lines+markers',
+            name='Bubble Sort O(n²)',
+            line=dict(color='red', width=3),
+            marker=dict(size=10),
+            legendgroup='ordenamiento',
+            showlegend=False,
+            hovertemplate='<b>Bubble Sort</b><br>n: %{x}<br>Memoria: %{y:.2f} KB<extra></extra>'
+        ),
+        row=1, col=2
+    )
+
+    fig.update_xaxes(title_text="<b>Tamaño de entrada (n)</b>", row=1, col=1)
+    fig.update_xaxes(title_text="<b>Tamaño de entrada (n)</b>", row=1, col=2)
+    fig.update_yaxes(title_text="<b>Tiempo (segundos)</b>", type="log", row=1, col=1)
+    fig.update_yaxes(title_text="<b>Memoria pico usada (KB)</b>", row=1, col=2)
+
+    fig.update_layout(
+        title={
+            'text': "<b>Análisis Empírico de Búsqueda y Ordenamiento</b><br>"
+                    "<sub>Búsqueda Secuencial O(n) y Bubble Sort O(n²)</sub>", # TÍTULO CORREGIDO
+            'x': 0.5
+        },
+        height=700,
+        width=1600,
+        hovermode='closest',
+        template='plotly_white',
+        legend=dict(
+            orientation="v",
+            y=0.98,
+            x=1.02,
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="black",
+            borderwidth=2
+        ),
+        margin=dict(l=80, r=200, t=120, b=80)
+    )
+
+    html_content = fig.to_html(include_plotlyjs='cdn')
+
+    css_style = """
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+            max-width: 1700px;
+            width: 100%;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 20px;
+        }
+        .header h1 { margin: 0; }
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 8px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+    """
+
+    html_final = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Análisis Empírico</title>
+        {css_style}
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Análisis Empírico de Algoritmos</h1>
+                <p>Búsqueda Secuencial y Bubble Sort</p>
+            </div>
+
+            {html_content.split('<body>')[1].split('</body>')[0]}
+
+            <div class="info-box">
+                <ul>
+                    <li><b style="color:green">Búsqueda Secuencial:</b> O(n)</li>
+                    <li><b style="color:red">Bubble Sort:</b> O(n²)</li>
+                </ul>
+            </div>
+
+            <div class="footer">
+                Proyecto – Análisis y Diseño de Algoritmos | Implementación II: Ezequiel Ríos
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    with open("analisis_empirico_peliculas.html", "w", encoding="utf-8") as f:
+        f.write(html_final)
+
+    print("\n✓ Grafica generada en 'analisis_empirico_peliculas.html'\n")
+
+def analisis_empirico():
+    print("\n" + "="*80)
+    print("ANÁLISIS EMPÍRICO – BÚSQUEDA SECUENCIAL (O(n)) Y BUBBLE SORT (O(n²))")
+    print("="*80)
+
+    archivos = {
+        50: "peliculas_50.json",
+        200: "peliculas_200.json",
+        500: "peliculas_500.json",
+        1000: "peliculas_1000.json"
+    }
+
+    tamaños = list(archivos.keys())
+
+    tiempos = {
+        'busqueda_secuencial': [], # CLAVE CORREGIDA
+        'bubble_sort': []          # CLAVE CORREGIDA
+    }
+
+    memorias = {
+        'busqueda_secuencial': [], # CLAVE CORREGIDA
+        'bubble_sort': []          # CLAVE CORREGIDA
+    }
+
+    for n in tamaños:
+        print(f"Procesando tamaño n = {n}...")
+        peliculas = leer_peliculas(archivos[n])
+        
+        # Opcional: Para la medición de ordenamiento, es buena práctica trabajar 
+        # con una copia desordenada para medir el peor o caso promedio de O(n²)
+        copia_desordenada = peliculas.copy() 
+
+        # Búsqueda Secuencial O(n)
+        t_s, mem, _ = medir_tiempo_memoria(
+            busqueda_secuencial_por_titulo,
+            peliculas,
+            "the"
+        )
+        tiempos['busqueda_secuencial'].append(t_s)
+        memorias['busqueda_secuencial'].append(mem)
+
+        # Bubble Sort O(n²)
+        t_s, mem, _ = medir_tiempo_memoria(
+            bubble_sort,
+            copia_desordenada, # Usamos la copia para asegurar medición limpia
+            'rating',
+            True # Orden descendente, como en el reporte
+        )
+        tiempos['bubble_sort'].append(t_s)
+        memorias['bubble_sort'].append(mem)
+
+    print("\nAnálisis finalizado. Generando gráfica...\n")
+    generar_graficas_interactivas(tamaños, tiempos, memorias)
+
+
+# ============================================================================
+# MENÚS
+# ============================================================================
+
+def menu_principal():
+    print("\n" + "="*60)
+    print("     SISTEMA DE ADMINISTRACIÓN DE CARTELERA")
+    print("="*60)
+    print("1. Búsqueda de película por ID (O(log n))")
+    print("2. Búsqueda de película por título (O(n))")
+    print("3. Generar reporte de películas por rating (O(n²))")
+    print("4. Análisis Empírico (Generar Gráfica)")
+    print("5. Cambiar archivo de datos (para pruebas)")
+    print("6. Salir")
+    print("="*60)
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+def main():
+    # Cargar películas iniciales
+    archivo_actual = "peliculas.json"
+    
+    try:
+        peliculas = leer_peliculas(archivo_actual)
+        print(f"[OK] {len(peliculas)} peliculas cargadas desde '{archivo_actual}'")
+    except FileNotFoundError:
+        print(f"[ERROR] No se encontro el archivo '{archivo_actual}'")
+        return
+
+    # ==========================================================
+    # CORRECCIÓN CRÍTICA: Ordenar por ID al inicio para la Búsqueda Binaria O(log n)
+    # Usamos QuickSort (O(n log n) promedio) para este ordenamiento inicial eficiente.
+    # QuickSort modifica la lista 'peliculas' in-place.
+    # ==========================================================
+    try:
+        quick_sort(peliculas, 'id', 0, len(peliculas) - 1) 
+        print(f"[AVISO] Lista ordenada por ID con QuickSort para Búsqueda Binaria.")
+    except Exception as e:
+        print(f"[ERROR] Falló el ordenamiento inicial por ID: {e}")
+        return
+
+
+    while True:
+        menu_principal()
+        opcion = input("\nSeleccione una opcion: ").strip()
+
+        if opcion == "1":
+            # BÚSQUEDA POR ID (Ya ordenada)
+            try:
+                id_buscado = int(input("\nIngrese el ID de la pelicula: "))
+                posicion, pelicula = busqueda_binaria_por_id(peliculas, id_buscado)
+                
+                if pelicula:
+                    imprimir_resultado_busqueda_id(posicion, pelicula)
+                else:
+                    print(f"\n[X] No se encontro ninguna pelicula con ID {id_buscado}\n")
+            except ValueError:
+                print("\n[ERROR] El ID debe ser un numero entero\n")
+
+        elif opcion == "2":
+            # BÚSQUEDA POR TÍTULO
+            titulo = input("\nIngrese el titulo (o parte del titulo): ").strip()
+            if titulo:
+                resultados = busqueda_secuencial_por_titulo(peliculas, titulo)
+                imprimir_resultados_busqueda_titulo(resultados)
+            else:
+                print("\n[ERROR] Debe ingresar un titulo\n")
+
+        elif opcion == "3":
+            # REPORTE POR RATING
+            generar_reporte_rating(peliculas)
+            
+        elif opcion == "4":
+            # ANÁLISIS EMPÍRICO
+            analisis_empirico()
+
+        elif opcion == "5":
+            # CAMBIAR ARCHIVO DE DATOS
+            nuevo_archivo = cambiar_archivo_datos()
+            
+            if nuevo_archivo:
+                try:
+                    peliculas = leer_peliculas(nuevo_archivo)
+                    archivo_actual = nuevo_archivo
+                    # ¡IMPORTANTE! Reordenar la nueva lista para Búsqueda Binaria
+                    quick_sort(peliculas, 'id', 0, len(peliculas) - 1) 
+                    print(f"\n[OK] {len(peliculas)} peliculas cargadas y ordenadas desde '{archivo_actual}'\n")
+                except FileNotFoundError:
+                    print(f"\n[ERROR] No se encontro el archivo '{nuevo_archivo}'")
+                    print(f"  Manteniendo archivo actual: '{archivo_actual}'\n")
+                except Exception as e:
+                    print(f"[ERROR] Falló el procesamiento del nuevo archivo: {e}")
+
+        elif opcion == "6":
+            # SALIR
+            print("\n[OK] Saliendo del programa...\n")
+            break
+
+        else:
+            print("\n[ERROR] Opcion no valida. Intente de nuevo.\n")
+
+
+if __name__ == "__main__":
+    main()
